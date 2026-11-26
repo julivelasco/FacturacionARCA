@@ -1,0 +1,7 @@
+package com.example.tp4spring.exception;
+
+public class DatosInvalidosException extends RuntimeException {
+    public DatosInvalidosException(String message) {
+        super(message);
+    }
+}

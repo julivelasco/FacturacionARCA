@@ -1,0 +1,16 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "tsc -w",
+            "type": "shell",
+            "command": "tsc -w",
+            "options": {
+                "shell": { "executable": "cmd.exe", "args": ["/d", "/c"] }
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "runOptions": { "runOn": "folderOpen" }
+        }
+    ]
+}

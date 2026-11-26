@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Facturación</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+    body {
+        min-height: 100vh;
+        background: linear-gradient(135deg, #ffe9f2 0%, #ffe1f2 50%, #f7ebf2 100%);
+        background-attachment: fixed;
+    }
+
+    /* Vidrio claro */
+    .vidrio {
+        background: rgba(255, 255, 255, 0.55);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.85);
+        box-shadow: 0 8px 30px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    /* Grilla */
+    .columnas {
+        display: grid;
+        grid-template-columns: 80px 100px minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, 1.1fr) 50px 140px 110px;
+        gap: 0.75rem;
+    }
+    .fila {
+        cursor: pointer;
+        border-width: 1.5px;
+        transition: transform .15s, box-shadow .15s;
+        /* reflejo de vidrio: más claro arriba */
+        background-image: linear-gradient(180deg, rgba(255, 255, 255, .45) 0%, rgba(255, 255, 255, 0) 60%);
+    }
+    .fila:hover { transform: translateY(-1px); }
+    .fila.seleccionada { box-shadow: 0 0 0 2px #6366f1, 0 8px 24px rgba(15, 23, 42, .12); }
+
+    /* Pastel transparente por estado */
+    .fila-PENDIENTE { background-color: rgba(254, 240, 138, .55); border-color: rgba(250, 204, 21, .55); }
+    .fila-EMITIDA   { background-color: rgba(187, 247, 208, .60); border-color: rgba(74, 222, 128, .55); }
+    .fila-ANULADA   { background-color: rgba(254, 202, 202, .60); border-color: rgba(248, 113, 113, .55); }
+
+    /* El estado escrito en color */
+    .estado-texto { font-weight: 600; text-align: right; }
+    .estado-PENDIENTE { color: #a16207; }
+    .estado-EMITIDA   { color: #15803d; }
+    .estado-ANULADA   { color: #b91c1c; }
+
+    /* Pastillas (se usan en "Ver") */
+    .insignia { font-size: .7rem; font-weight: 600; letter-spacing: .03em; padding: .2rem .6rem; border-radius: 9999px; }
+    .insignia-PENDIENTE { background: rgba(254, 240, 138, .8); color: #854d0e; }
+    .insignia-EMITIDA   { background: rgba(187, 247, 208, .8); color: #166534; }
+    .insignia-ANULADA   { background: rgba(254, 202, 202, .8); color: #991b1b; }
+
+    /* Campos */
+    #filtros label { display: flex; flex-direction: column; gap: .25rem; font-size: .75rem;
+                     text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+    .campo { background: rgba(255, 255, 255, .7); border: 1px solid rgba(148, 163, 184, .4);
+             border-radius: .75rem; padding: .5rem .75rem; color: #1e293b; width: 100%;
+             font-size: .9rem; text-transform: none; letter-spacing: normal; }
+    .campo:focus { outline: 2px solid #a5b4fc; outline-offset: 1px; }
+
+    /* Botones */
+    .boton { background: rgba(255, 255, 255, .7); border: 1px solid rgba(148, 163, 184, .4); color: #1e293b;
+             border-radius: 9999px; padding: .5rem 1rem; font-size: .9rem; white-space: nowrap;
+             transition: background .15s; }
+    .boton:hover:not(:disabled) { background: rgba(255, 255, 255, .95); }
+    .boton:disabled { opacity: .4; cursor: not-allowed; }
+    .boton-principal { background: rgb(255, 187, 200); border-color: rgb(250, 178, 191); color: rgb(33, 32, 32); }
+    .boton-principal:hover:not(:disabled) { background: #ff92ba; }
+    .boton-peligro { background: #ef4444; border-color: #ef4444; color: white; }
+    .boton-peligro:hover:not(:disabled) { background: #dc2626; }
+
+    /* Pestañas */
+    .pestania { padding: .4rem 1rem; border-radius: 9999px; font-size: .9rem; color: #475569; }
+    .pestania.activa { background: white; color: #1e293b; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+    .pestania:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* Mensajes */
+    .mensaje-ok    { background: rgba(187, 247, 208, .9); color: #14532d; }
+    .mensaje-error { background: rgba(254, 202, 202, .95); color: #7f1d1d; }
+
+    /* Semáforo estilo Mac: los símbolos aparecen al pasar el mouse */
+    .semaforo { display: flex; gap: 8px; }
+    .luz { width: 13px; height: 13px; border-radius: 9999px; border: 1px solid rgba(0, 0, 0, .12); position: relative; padding: 0; }
+    .luz-roja { background: #ff5f57; }
+    .luz-amarilla { background: #febc2e; }
+    .luz-verde { background: #28c840; }
+    button.luz { cursor: pointer; }
+    button.luz:hover { filter: brightness(0.88); }
+
+    /* Filas del explorer (sin estado) */
+    .fila-neutral { background-color: rgba(255, 255, 255, .55); }
+
+    /* Etiqueta del filtro de cliente, igual a las otras */
+    .etiqueta-filtro { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+
+    /* Sin flechitas en los campos numéricos */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+
+    .tabla-renglones th, .tabla-renglones td { padding: .5rem .75rem; }
+
+    /* El campito de cantidad de los renglones */
+    .campo.campo-cantidad { width: 4.5rem; padding: .3rem .5rem; margin: 0 auto; }
+
+    .insignia-ACTIVO { background: rgba(226, 232, 240, .9); color: #475569; }
+
+    /* Barra inferior de facturas: todo en una sola fila */
+    footer:has(#botonNueva) { flex-wrap: nowrap; gap: .5rem; }
+    footer:has(#botonNueva) div { flex-wrap: nowrap; gap: .35rem; }
+    footer:has(#botonNueva) .boton { padding: .35rem .7rem; font-size: .8rem; }
+    footer:has(#botonNueva) span { font-size: .75rem; }
+    footer:has(#botonNueva) select { width: 4rem; padding: .3rem .5rem; font-size: .8rem; }
+</style>
+</head>
+    <body class="text-slate-800 font-sans">
+        <div class="max-w-7xl mx-auto p-6 space-y-5">
+            <header class="flex flex-wrap items-center justify-between gap-4">
+                <h1 class="text-3xl font-semibold tracking-tight">Facturación</h1>
+                <nav id="pestanias" class="vidrio rounded-full p-1 flex gap-1">
+                    <button class="pestania activa" data-pestania="facturas">Facturas</button>
+                    <button class="pestania" data-pestania="clientes">Clientes</button>
+                    <button class="pestania" data-pestania="precios">Precios</button>
+                    <button class="pestania" data-pestania="catalogos">Catálogos</button>
+                </nav>
+            </header>
+
+            <!-- FILTROS -->
+            <div id="vistaFacturas" class="space-y-5"> 
+                <form id="filtros" class="vidrio rounded-2xl p-4 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3 items-end">
+                    <label>Número <input id="filtroNumero" type="number" min="1" class="campo"></label>
+                    <label>Desde <input id="filtroDesde" type="date" class="campo"></label>
+                    <label>Hasta <input id="filtroHasta" type="date" class="campo"></label>
+                    <div class="col-span-2 flex flex-col gap-1">
+                        <span class="etiqueta-filtro">Cliente</span>
+                        <select id="filtroCliente" class="campo">
+                            <option value="">Todos</option>
+                            <option value="sin">Sin cliente</option>
+                            <option value="elegir">Elegir cliente...</option>
+                        </select>
+                    </div>
+                    <label>Estado
+                        <select id="filtroEstado" class="campo">
+                            <option value="">Todos</option>
+                            <option>PENDIENTE</option>
+                            <option>EMITIDA</option>
+                            <option>ANULADA</option>
+                        </select>
+                    </label>
+                    <label>ARCA
+                        <select id="filtroArca" class="campo">
+                            <option value="">Todas</option>
+                            <option value="true">Informadas</option>
+                            <option value="false">Sin informar</option>
+                        </select>
+                    </label>
+                    <label>Monto mín. <input id="filtroMonto" type="number" min="0" class="campo"></label>
+                    <div class="col-span-2 md:col-span-4 lg:col-span-8 flex gap-2 justify-end">
+                        <button type="button" id="botonLimpiar" class="boton">Limpiar</button>
+                        <button type="submit" class="boton boton-principal">Buscar</button>
+                    </div>
+                </form>
+
+                <!-- GRILLA -->
+                <section class="overflow-x-auto">
+                    <div class="min-w-[900px] space-y-2">
+                        <div class="columnas px-4 text-xs uppercase tracking-wide text-slate-500">
+                            <span>Número</span><span>Fecha</span><span>Cliente</span><span>Condición IVA</span>
+                            <span>Punto de venta</span><span class="text-center">Ítems</span>
+                            <span class="text-right">Total</span><span class="text-center">Estado</span>
+                        </div>
+                        <div id="filas" class="space-y-2"></div>
+                    </div>
+                </section>
+
+                <!-- PAGINACIÓN Y ACCIONES -->
+                <footer class="vidrio rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 sticky bottom-3 z-10">
+                    <div class="flex items-center gap-2">
+                        <button id="botonAnterior" class="boton">‹ Anterior</button>
+                        <span id="textoPagina" class="text-sm text-slate-600 px-2 whitespace-nowrap"></span>
+                        <button id="botonSiguiente" class="boton">Siguiente ›</button>
+                        <select id="selectTamanio" class="campo w-20" title="Facturas por página">
+                            <option value="10">10</option>
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                        </select>
+                        <span class="text-sm text-slate-500 whitespace-nowrap">por página</span>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="botonNueva" class="boton boton-principal">+ Nueva factura</button>
+                        <button id="botonImprimir" class="boton" disabled>Imprimir</button>
+                        <button id="botonVer" class="boton" disabled>Ver</button>
+                        <button id="botonModificar" class="boton" disabled>Modificar</button>
+                        <button id="botonInformar" class="boton" disabled>Informar a ARCA</button>
+                        <button id="botonEliminar" class="boton" disabled>Eliminar</button>
+                        <button id="botonAnular" class="boton boton-peligro" disabled>Anular</button>
+                    </div>
+                </footer>
+            </div>   
+            <!-- PANTALLA GENÉRICA DE CATÁLOGOS -->
+            <div id="vistaCatalogo" class="hidden space-y-5">
+                <div class="vidrio rounded-2xl p-4 flex flex-wrap items-center gap-3">
+                    <h2 id="catalogoTitulo" class="text-xl font-semibold mr-auto"></h2>
+                    <div id="catalogoTipoContenedor" class="hidden">
+                        <select id="catalogoTipo" class="campo" style="width: auto"></select>
+                    </div>
+                    <div id="catalogoOrdenContenedor" class="hidden">
+                        <select id="catalogoOrden" class="campo" style="width: auto" title="Ordenar por"></select>
+                    </div>
+                    <input id="catalogoTexto" class="campo max-w-xs" placeholder="Buscar..." autocomplete="off">
+                    <label class="flex items-center gap-2 text-sm text-slate-600 whitespace-nowrap">
+                        <input id="catalogoBajas" type="checkbox" class="accent-indigo-500"> Ver inactivos
+                    </label>
+                </div>
+                <section class="vidrio rounded-3xl p-4 overflow-x-auto">
+                    <div class="min-w-[700px] space-y-2">
+                        <div id="catalogoEncabezado" class="grid gap-3 px-4 text-xs uppercase tracking-wide text-slate-500"></div>
+                        <div id="catalogoFilas" class="space-y-2"></div>
+                    </div>
+                </section>
+
+                <footer class="vidrio rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 sticky bottom-3 z-10">
+                    <div class="flex items-center gap-2">
+                        <button id="catalogoAnterior" class="boton">‹ Anterior</button>
+                        <span id="catalogoPagina" class="text-sm text-slate-600 px-2 whitespace-nowrap"></span>
+                        <button id="catalogoSiguiente" class="boton">Siguiente ›</button>
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="catalogoNuevo" class="boton boton-principal">+ Nuevo</button>
+                        <button id="catalogoModificar" class="boton" disabled>Modificar</button>
+                        <button id="catalogoBaja" class="boton boton-peligro" disabled>Dar de baja</button>
+                        <button id="catalogoReactivar" class="boton" disabled>Reactivar</button>
+                    </div>
+                </footer>
+            </div> 
+        </div>
+
+        <!-- PANEL: la "otra pestaña" que se abre encima -->
+        <div id="panel" class="fixed inset-0 hidden items-start justify-center p-6 bg-slate-900/20 backdrop-blur-sm overflow-y-auto z-40">
+            <div id="panelVentana" class="vidrio rounded-3xl w-full max-w-5xl p-6 mt-6 transition-all">
+                <div class="flex items-center gap-4 mb-5">
+                    <div class="semaforo">
+                        <button id="botonCerrarPanel" class="luz luz-roja" title="Cerrar"></button>
+                        <span class="luz luz-amarilla"></span>
+                        <button id="botonAgrandarPanel" class="luz luz-verde" title="Agrandar"></button>
+                    </div>
+                    <h2 id="panelTitulo" class="text-2xl font-semibold"></h2>
+                </div>
+                <div id="panelContenido"></div>
+            </div>
+        </div>
+        <!-- EXPLORER: ventanita para buscar y elegir -->
+        <div id="explorer" class="fixed inset-0 hidden items-start justify-center p-6 bg-slate-900/25 backdrop-blur-sm overflow-y-auto z-50">
+            <div class="vidrio rounded-3xl w-full max-w-3xl p-6 mt-10">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="semaforo">
+                        <button id="botonCerrarExplorer" class="luz luz-roja" title="Cerrar"></button>
+                        <span class="luz luz-amarilla"></span>
+                        <span class="luz luz-verde"></span>
+                    </div>
+                    <h2 id="explorerTitulo" class="text-xl font-semibold"></h2>
+                </div>
+                <form id="explorerBusqueda" class="flex gap-2 mb-4">
+                    <input id="explorerTexto" class="campo" placeholder="Buscar..." autocomplete="off">
+                    <select id="explorerFiltro" class="campo hidden" style="width: auto"></select>
+                    <label id="explorerBajasContenedor" class="hidden items-center gap-2 text-sm text-slate-600 whitespace-nowrap px-2">
+                        <input id="explorerBajas" type="checkbox" class="accent-indigo-500"> Ver inactivos
+                    </label>
+                    <button type="submit" class="boton boton-principal">Buscar</button>
+                </form>
+                <div id="explorerEncabezado" class="grid gap-3 px-4 pb-2 text-xs uppercase tracking-wide text-slate-500"></div>
+                <div id="explorerFilas" class="space-y-2"></div>
+                <div class="flex items-center justify-between mt-4">
+                    <div class="flex items-center gap-2">
+                        <button id="explorerAnterior" class="boton">‹</button>
+                        <span id="explorerPagina" class="text-sm text-slate-600 whitespace-nowrap"></span>
+                        <button id="explorerSiguiente" class="boton">›</button>
+                    </div>
+                    <button id="explorerElegir" class="boton boton-principal" disabled>Elegir</button>
+                </div>
+            </div>
+        </div>
+        <!-- CONFIRMACIÓN: el "¿Seguro?" lindo -->
+        <div id="confirmacion" class="fixed inset-0 hidden items-center justify-center p-6 bg-slate-900/30 backdrop-blur-sm z-[60]">
+            <div class="vidrio rounded-3xl w-full max-w-md p-6">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="semaforo">
+                        <button id="confirmacionCerrar" class="luz luz-roja" title="Cancelar"></button>
+                        <span class="luz luz-amarilla"></span>
+                        <span class="luz luz-verde"></span>
+                    </div>
+                    <h2 id="confirmacionTitulo" class="text-lg font-semibold"></h2>
+                </div>
+                <p id="confirmacionMensaje" class="text-slate-600 mb-6 whitespace-pre-line"></p>
+                <div class="flex justify-end gap-2">
+                    <button id="confirmacionNo" class="boton">Cancelar</button>
+                    <button id="confirmacionSi" class="boton boton-principal">Aceptar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- MENSAJES -->
+        <div id="mensaje" class="fixed top-5 left-1/2 -translate-x-1/2 hidden vidrio rounded-full px-5 py-2 text-sm z-50"></div>
+        <script type="module" src="dist/app.js"></script>
+    </body>
+</html>
